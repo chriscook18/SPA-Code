@@ -111,8 +111,9 @@ int main() {
 	}
 	
 	printf("Final energy is %f\n", energy(projPref));
-	finalConfig = fopen("finalConfig.txt", "a");	
+	
 	/* print final configuration to file */
+	finalConfig = fopen("finalConfig.txt", "a");	
 	for (i=0; i<cols; i++) {
 		fprintf(finalConfig, "%d,%d,%d\n", i+1, projNum[i]+1, projPref[i]);
 	}
@@ -132,56 +133,92 @@ void cycleOfMoves( int choices[rows][cols], int projNum[cols], int projPref[cols
 	int lecClashes;
 	
 	generateRandomNumbers(); 
+	
 	currentEnergy = energy( projPref );
 	printf("Temperature %f\nCurrent Energy = %f\n\n", temp,currentEnergy);
+	
 	while ( moves < ( 1000 * cols ) && successfulmoves < ( 100 * cols ) ) { 
+		
+		/* increment counters */
 		moves++;
 		successfulmoves++; 
-		/* change the allocation here */
+		
+		/* change the allocation */
 		changeAllocationByPref( choices, projNum, projPref, changes );
 
+
+		/* energy of our new allocation */
+		trialEnergy = energy( projPref ); 
+		
 		//printf(" weight 1: %f, weight 2: %f, weight 3: %f, weight 4: %f\n", weight1, weight2, weight3, weight4);
-		trialEnergy = energy( projPref ); /* energy of our new allocation */
 		//printf("current energy and trial energy, %d, %d\n", currentEnergy, trialEnergy);
+		
 		changeEnergy = (float)( trialEnergy - currentEnergy ); 
 		ratioEnergy = fabs( (float)trialEnergy / (float)currentEnergy ); /*need to be floats for things to work */
 
 		vector_random_generator(1,rands);
 		
+		/* count violations of the supervisor constraint */
 		lecClashes=countSupConstraintClashes( supConstraint, projNum, projNum[changes[0]] ); /* projNum[changes[0]] != changes[1] at this point. The former is current proj, the latter old proj */		
 
-		if ( projClashFullCount( projNum ) > 0 ) { /* Reject configuration due to clash - revert changes and reduce succesful move counter */
+		if ( projClashFullCount( projNum ) > 0 ) {
+			/* Reject configuration due to clash - revert changes and reduce succesful move counter */
+			
+			// Undo project change
 			projNum[changes[0]] = changes[1];
 			projPref[changes[0]] = changes[2];
+			
+			// Don't count as successful
+			successfulmoves--;
+			
+			//printf("ttttttttttttttthere was a clash\n");
+			
+		} else if (temp > 0 && rands[0] > exp( -changeEnergy / temp ) ) {
+			/* Reject configuration due to energy - revert changes */
+			
+			// Undo project change
+			projNum[changes[0]] = changes[1];
+			projPref[changes[0]] = changes[2];
+			
+			// Don't count as successful
+			successfulmoves--;
+			
+			//printf("reject due to energy\n");
+	
+		} else if ( temp == 0 && trialEnergy > currentEnergy){
+			/* Reject due to energy in T=0 case */
 
-			successfulmoves--;
-		//	printf("ttttttttttttttthere was a clash\n");
-		} else if (temp > 0 && rands[0] > exp( -changeEnergy / temp ) ) { /* Reject configuration due to energy - revert changes */
+			// Undo project change
 			projNum[changes[0]] = changes[1];
 			projPref[changes[0]] = changes[2];
+			
+			// Don't count as successful
 			successfulmoves--;
-		//	printf("reject due to energy\n");
-
-		} else if ( temp == 0 && trialEnergy > currentEnergy){ /* Reject due to energy in T=0 case */
-
+			
+			//printf("reject due to energy\n");
+			
+		} else if ( lecClashes>0 ) {
+			/* reject due to lecturer constraint violation */
+			
+			// Undo project change
 			projNum[changes[0]] = changes[1];
 			projPref[changes[0]] = changes[2];
+			// Don't count as successful
 			successfulmoves--;
-		//	printf("reject due to energy\n");
-		} else if ( lecClashes>0 ) { /* reject due to lecturer constraint violation */
-			projNum[changes[0]] = changes[1];
-			projPref[changes[0]] = changes[2];
-			successfulmoves--;
-		//	printf("reject due to lecturers\n");
+			
+			//printf("reject due to lecturers\n");
 		}
 			
-		if ( currentEnergy == trialEnergy ) { /* This is (in theory) impossible. We count because as its a nice tracker for if things are broken. */
-			//printf("This shouldn't be happening?\n\n");
+		if ( currentEnergy == trialEnergy ) {
+			/* This is (in theory) impossible. We count because as its a nice tracker for if things are broken. */
+			
 			same++;
 			successfulmoves--;
+			//printf("This shouldn't be happening?\n\n");
 		}	
 		
 		currentEnergy = energy( projPref );
+		
 		//fprintf(saveData, "%d ", currentEnergy);
 		//fprintf(saveData, "\n");
 				
